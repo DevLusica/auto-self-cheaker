@@ -1,1 +1,1 @@
-# auto-self-cheaker
+# self-cheaker-go
