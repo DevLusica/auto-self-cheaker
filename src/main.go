@@ -1,4 +1,4 @@
-package main
+package selfCheck
 
 import (
 	"bytes"
@@ -8,19 +8,37 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"encoding/pem"
-	"errors"
 	"fmt"
 	"io/ioutil"
 	"net/http"
 	"strings"
 )
 
-func main() {
-
-	fmt.Println(selfCheck("이름", "생년월일", "학교번호", "지역번호", "비밀번호"))
+func selfCheck(name, birth, school, org, password string) (string, error) {
+	usertoken, err := findUser(name, birth, school, org)
+	if err != nil {
+		return "", err
+	}
+	passwordtoken, err := validatePassword(password, org, usertoken)
+	if err != nil {
+		return "", err
+	}
+	grouptoken, userPNo, err := selectUserGroup(org, passwordtoken)
+	if err != nil {
+		return "", err
+	}
+	finaltoken, err := getUserInfo(userPNo, school, org, grouptoken)
+	if err != nil {
+		return "", err
+	}
+	res, err := registerServey(name, org, finaltoken)
+	if err != nil {
+		return "", err
+	}
+	return res, nil
 }
 
-var publicKey = []byte(`
+var privateKey = []byte(`
 -----BEGIN PUBLIC KEY-----
 MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA81dCnCKt0NVH7j5Oh2+S
 GgEU0aqi5u6sYXemouJWXOlZO3jqDsHYM1qfEjVvCOmeoMNFXYSXdNhflU7mjWP8
@@ -32,8 +50,8 @@ tQIDAQAB
 -----END PUBLIC KEY-----
 `)
 
-func rsaEncrypt(origData string) string {
-	block, _ := pem.Decode(publicKey)
+func encrypt(origData string) string {
+	block, _ := pem.Decode(privateKey)
 	pubInterface, _ := x509.ParsePKIXPublicKey(block.Bytes)
 	pub := pubInterface.(*rsa.PublicKey)
 	enc, _ := rsa.EncryptPKCS1v15(rand.Reader, pub, []byte(origData))
@@ -41,49 +59,66 @@ func rsaEncrypt(origData string) string {
 }
 
 func findUser(name, birth, school, org string) (string, error) {
+
 	val := map[string]string{
 		"orgCode":   school,
 		"loginType": "school",
 		"stdntPNo":  "",
-		"name":      rsaEncrypt(name),
-		"birthday":  rsaEncrypt(birth),
+		"name":      encrypt(name),
+		"birthday":  encrypt(birth),
 	}
+
 	jsonValue, _ := json.Marshal(val)
+
 	req, _ := http.NewRequest("POST", "https://"+org+"hcs.eduro.go.kr/v2/findUser", bytes.NewBuffer(jsonValue))
+
 	req.Header.Set("Content-Type", "application/json")
 
 	client := &http.Client{}
+
 	resp, _ := client.Do(req)
-	if resp.StatusCode != 200 {
-		return "", errors.New("서버 오류가 발생했습니다. 이름이나 생년월일 또는 학교 정보를 다시 한번 확인해 주세요")
-	}
+
 	defer resp.Body.Close()
+
 	body, _ := ioutil.ReadAll(resp.Body)
+
 	var data map[string]string
 	_ = json.Unmarshal(body, &data)
+
 	usertoken := data["token"]
-	fmt.Println(usertoken)
+
 	return usertoken, nil
 }
 
 func validatePassword(password, org, token string) (string, error) {
+
 	val := map[string]string{
 		"deviceUuid": "",
-		"password":   rsaEncrypt(password),
+		"password":   encrypt(password),
 	}
+
 	jsonValue, _ := json.Marshal(val)
+
 	req, _ := http.NewRequest("POST", "https://"+org+"hcs.eduro.go.kr/v2/validatePassword", bytes.NewBuffer(jsonValue))
+
 	req.Header.Set("Content-Type", "application/json")
+
 	req.Header.Set("Authorization", token)
 
 	client := &http.Client{}
+
 	resp, _ := client.Do(req)
+
 	defer resp.Body.Close()
+
 	var resdata map[string]string
+
 	body, _ := ioutil.ReadAll(resp.Body)
+
 	_ = json.Unmarshal(body, &resdata)
+
 	passwordtoken := strings.Replace(string(body), "\"", "", -1)
-	fmt.Println(string(passwordtoken))
+
 	return passwordtoken, nil
 }
 
@@ -102,7 +137,7 @@ func selectUserGroup(org, token string) (string, string, error) {
 
 	userPNo := data[0]["userPNo"]
 	grouptoken := data[0]["token"]
-	fmt.Println(string(grouptoken))
+
 	return grouptoken, userPNo, nil
 }
 
@@ -175,28 +210,4 @@ func registerServey(name, org, token string) (string, error) {
 	body, _ := ioutil.ReadAll(respon.Body)
 	_ = json.Unmarshal(body, &resdata)
 	return resdata["inveYmd"], nil
-}
-
-func selfCheck(name, birth, school, org, password string) (string, error) {
-	usertoken, err := findUser(name, birth, school, org)
-	if err != nil {
-		return "", err
-	}
-	passwordtoken, err := validatePassword(password, org, usertoken)
-	if err != nil {
-		return "", err
-	}
-	grouptoken, userPNo, err := selectUserGroup(org, passwordtoken)
-	if err != nil {
-		return "", err
-	}
-	finaltoken, err := getUserInfo(userPNo, school, org, grouptoken)
-	if err != nil {
-		return "", err
-	}
-	res, err := registerServey(name, org, finaltoken)
-	if err != nil {
-		return "", err
-	}
-	return res, nil
 }
