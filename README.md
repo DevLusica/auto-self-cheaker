@@ -1,1 +1,1 @@
-# self-cheaker-go
+# self-checker-go
