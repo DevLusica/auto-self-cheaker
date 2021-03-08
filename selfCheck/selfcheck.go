@@ -8,13 +8,12 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"encoding/pem"
-	"fmt"
 	"io/ioutil"
 	"net/http"
 	"strings"
 )
 
-func selfCheck(name, birth, school, org, password string) (string, error) {
+func SelfCheck(name, birth, school, org, password string) (string, error) {
 	usertoken, err := findUser(name, birth, school, org)
 	if err != nil {
 		return "", err
@@ -173,7 +172,6 @@ func getUserInfo(userPNo, orgCode, org, token string) (string, error) {
 	var data map[string]string
 	_ = json.Unmarshal(body, &data)
 	finaltoken := data["token"]
-	fmt.Println(string(finaltoken))
 	return finaltoken, nil
 }
 
