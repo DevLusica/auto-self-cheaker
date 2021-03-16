@@ -5,5 +5,5 @@ import (
 )
 
 func main() {
-	selfCheck.SelfCheck("전무강", "031007", "C100000394", "pen", "0628")
+	selfCheck.SelfCheck("이름", "생일", "C100000394", "pen", "비밀번호")
 }
